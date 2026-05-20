@@ -1,0 +1,19 @@
+# Arquivos de depuração e testes
+debug.py
+debug_links.txt
+
+# Arquivos do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ambientes Virtuais
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
