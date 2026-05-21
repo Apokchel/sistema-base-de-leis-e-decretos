@@ -96,28 +96,55 @@ def scrape_categoria(nome_categoria, dados_categoria, page):
     url_base = dados_categoria["url_base"]
     pasta_destino = dados_categoria["pasta"]
     
-    try:
-        # Abre a página principal
-        page.goto(url_base, wait_until="networkidle")
-    except Exception as e:
-        print(f"⚠️ Erro ao acessar a página principal de {nome_categoria}: {e}")
-        return
-
-    # Extrai os links da página (Playwright já executou o Javascript)
-    links_elementos = page.eval_on_selector_all("a", "elements => elements.map(e => ({href: e.href, text: e.innerText}))")
-    
-    # 1. Busca subpáginas de anos (ex: leis-2026, leis-2018-749)
-    sub_paginas = []
     categoria_slug = url_base.split('/')[-1] # ex: 'leis-municipais'
     
-    for link in links_elementos:
-        href = link.get('href', '')
-        if href and re.search(r'(19|20)\d{2}', href) and not href.lower().endswith('.pdf'):
-            # Verifica se o link pertence à nossa categoria e não a 'licitacao'
-            if categoria_slug in href:
-                full_url = urllib.parse.urljoin(BASE_URL, href)
-                if full_url not in sub_paginas and "quadra.sp.gov.br" in full_url:
-                    sub_paginas.append(full_url)
+    # 1. Busca subpáginas de anos (Lidando com Paginação)
+    valid_subpages = []
+    pagina_atual = 1
+    
+    while True:
+        # Navega para a página correta
+        url_paginada = url_base if pagina_atual == 1 else f"{url_base}?&pagina={pagina_atual}"
+        page.goto(url_paginada)
+        page.wait_for_timeout(3000)
+        
+        # Encontra todos os links de subpáginas de anos
+        links_elementos = page.eval_on_selector_all(
+            "a",
+            "(elements) => elements.map(el => ({href: el.getAttribute('href'), text: el.innerText}))"
+        )
+        
+        novos_links = 0
+        for p in links_elementos:
+            href = p.get('href', '')
+            if href and re.search(r'(19|20)\d{2}', href) and not href.lower().endswith('.pdf'):
+                if categoria_slug in href:
+                    # Verifica se o link já não foi capturado
+                    if not any(v.get('href') == href for v in valid_subpages):
+                        valid_subpages.append(p)
+                        novos_links += 1
+                        
+        print(f"    - Página {pagina_atual}: {novos_links} anos encontrados.")
+        
+        # Se não achou nenhum ano novo nesta aba, significa que as páginas acabaram
+        if novos_links == 0:
+            break
+            
+        pagina_atual += 1
+                
+    # Ordena as páginas de anos do menor (mais antigo) para o maior (mais novo)
+    def extrair_ano(p):
+        match = re.search(r'(20\d{2}|19\d{2})', p.get('href', '') + p.get('text', ''))
+        return int(match.group(1)) if match else 9999
+        
+    valid_subpages.sort(key=extrair_ano)
+    
+    # Extrai URLs únicas das subpáginas
+    sub_paginas = []
+    for item in valid_subpages:
+        full_url = urllib.parse.urljoin(BASE_URL, item.get('href', ''))
+        if full_url not in sub_paginas and "quadra.sp.gov.br" in full_url:
+            sub_paginas.append(full_url)
                 
     print(f"📅 Encontradas {len(sub_paginas)} subpáginas de anos para {nome_categoria}.")
 
@@ -172,6 +199,9 @@ def scrape_categoria(nome_categoria, dados_categoria, page):
         if not pdfs_encontrados:
             print(f"    Nenhum PDF encontrado na página de {ano_str}. (Pode estar vazio ou usando outro formato de link)")
             continue
+            
+        # Inverte a lista de PDFs para começar da lei mais antiga (final da página) para a mais nova (topo da página)
+        pdfs_encontrados.reverse()
             
         print(f"    Encontrados {len(pdfs_encontrados)} leis/decretos reais. Iniciando download para {pasta_ano}...")
         for index, pdf_data in enumerate(pdfs_encontrados):
