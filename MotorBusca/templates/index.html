@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuadraBusca - Pesquisa de Leis</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #ffffff;
+            padding: 40px 20px;
+            text-align: center;
+            border-bottom: 1px solid #ebebeb;
+        }
+        h1 {
+            margin: 0;
+            color: #4285f4; /* Azul estilo Google */
+            font-size: 3rem;
+            font-weight: bold;
+        }
+        h1 span.red { color: #ea4335; }
+        h1 span.yellow { color: #fbbc05; }
+        h1 span.green { color: #34a853; }
+        
+        p.subtitle {
+            color: #666;
+            margin-top: 5px;
+            font-size: 1.1rem;
+        }
+        .search-container {
+            max-width: 700px;
+            margin: 30px auto 30px auto;
+            text-align: center;
+            padding: 0 15px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 15px 25px;
+            font-size: 1.2rem;
+            border: 1px solid #dfe1e5;
+            border-radius: 30px;
+            box-shadow: 0 1px 6px rgba(32,33,36,.1);
+            outline: none;
+            transition: box-shadow 0.2s;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus {
+            box-shadow: 0 1px 10px rgba(32,33,36,.25);
+        }
+        .results-container {
+            max-width: 800px;
+            margin: 0 auto 50px auto;
+            padding: 0 20px;
+        }
+        .result-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #ebebeb;
+            transition: transform 0.1s;
+        }
+        .result-card:hover {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .doc-title {
+            font-size: 1.3rem;
+            color: #1a0dab;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .doc-title:hover {
+            text-decoration: underline;
+        }
+        .doc-category {
+            font-size: 0.85rem;
+            color: #006621;
+            margin: 5px 0 10px 0;
+            word-wrap: break-word;
+        }
+        .doc-snippet {
+            font-size: 0.95rem;
+            color: #4d5156;
+            line-height: 1.6;
+        }
+        mark {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 0 3px;
+            border-radius: 2px;
+            font-weight: bold;
+        }
+        .no-results {
+            text-align: center;
+            color: #666;
+            margin-top: 50px;
+            font-style: italic;
+        }
+        #loading {
+            text-align: center;
+            display: none;
+            color: #666;
+            margin-top: 20px;
+        }
+        .stats {
+            color: #70757a;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+        .filtros {
+            max-width: 700px;
+            margin: 0 auto 20px auto;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            padding: 0 15px;
+        }
+        .filtros select {
+            padding: 8px 14px;
+            font-size: 0.95rem;
+            border: 1px solid #dfe1e5;
+            border-radius: 20px;
+            background: white;
+            outline: none;
+            cursor: pointer;
+        }
+        .filtros select:focus {
+            box-shadow: 0 1px 6px rgba(32,33,36,.15);
+        }
+        .doc-meta {
+            display: inline-block;
+            font-size: 0.75rem;
+            background: #e8f0fe;
+            color: #1967d2;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .doc-score {
+            float: right;
+            font-size: 0.75rem;
+            color: #999;
+        }
+        .snippet-block {
+            margin-top: 8px;
+            padding-left: 8px;
+            border-left: 2px solid #f0f0f0;
+        }
+        .reindex-bar {
+            max-width: 700px;
+            margin: 0 auto 10px auto;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 12px;
+            padding: 0 15px;
+            font-size: 0.85rem;
+            color: #70757a;
+        }
+        .reindex-bar button {
+            padding: 6px 14px;
+            font-size: 0.85rem;
+            border: 1px solid #dfe1e5;
+            border-radius: 16px;
+            background: white;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .reindex-bar button:hover:not(:disabled) {
+            background: #f1f3f4;
+        }
+        .reindex-bar button:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+        /* Badge de qualidade do texto */
+        .badge-qualidade {
+            display: inline-block;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 6px;
+            vertical-align: middle;
+            font-weight: 500;
+        }
+        .badge-qualidade.ok      { background:#e6f4ea; color:#137333; }
+        .badge-qualidade.curto   { background:#fef7e0; color:#b06000; }
+        .badge-qualidade.vazio   { background:#fce8e6; color:#a50e0e; }
+        /* Link de referência cruzada dentro de snippet */
+        .ref-link {
+            color: #1967d2;
+            text-decoration: none;
+            border-bottom: 1px dotted #1967d2;
+            font-weight: 500;
+        }
+        .ref-link:hover {
+            background: #e8f0fe;
+            text-decoration: none;
+        }
+        /* Caixa de ajuda dos operadores */
+        .ajuda-toggle {
+            background: none;
+            border: none;
+            color: #1967d2;
+            cursor: pointer;
+            font-size: 0.85rem;
+            text-decoration: underline;
+            padding: 0;
+        }
+        .ajuda-box {
+            max-width: 700px;
+            margin: 0 auto 15px auto;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #555;
+            display: none;
+        }
+        .ajuda-box.aberto { display: block; }
+        .ajuda-box h4 { margin: 0 0 8px 0; color: #333; font-size: 0.95rem; }
+        .ajuda-box code {
+            background: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            border: 1px solid #e0e0e0;
+            font-family: 'Consolas', 'Courier New', monospace;
+            color: #c7254e;
+        }
+        .ajuda-box ul { margin: 5px 0 0 0; padding-left: 20px; }
+        .ajuda-box li { margin-bottom: 4px; }
+        /* "Você quis dizer" — sugestões para typos */
+        .sugestoes {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 1rem;
+            color: #555;
+        }
+        .sugestoes a {
+            color: #1967d2;
+            text-decoration: none;
+            font-weight: 500;
+            font-style: italic;
+            margin: 0 4px;
+        }
+        .sugestoes a:hover { text-decoration: underline; }
+        /* Histórico de buscas (chips) */
+        .historico {
+            max-width: 700px;
+            margin: 0 auto 15px auto;
+            padding: 0 15px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+            font-size: 0.8rem;
+            color: #888;
+        }
+        .historico .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #f1f3f4;
+            color: #444;
+            padding: 4px 10px;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .historico .chip:hover { background: #e8eaed; }
+        .historico .chip .x {
+            color: #999;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 0 2px;
+        }
+        .historico .chip .x:hover { color: #d33; }
+        .historico .limpar {
+            color: #999;
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: 0.75rem;
+        }
+        /* Botão exportar CSV */
+        .btn-exportar {
+            float: right;
+            padding: 4px 12px;
+            font-size: 0.8rem;
+            border: 1px solid #dfe1e5;
+            border-radius: 14px;
+            background: white;
+            cursor: pointer;
+            color: #444;
+        }
+        .btn-exportar:hover { background: #f1f3f4; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1><span class="red">Q</span>u<span class="yellow">a</span>d<span class="green">r</span>aBusca</h1>
+        <p class="subtitle">Motor de busca inteligente do acervo de Leis e Decretos</p>
+    </header>
+
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Busque por leis, palavras-chave, número da lei (ex: 749), '44 horas', etc..." autocomplete="off">
+    </div>
+
+    <div class="historico" id="historicoContainer" style="display:none;"></div>
+
+    <div class="filtros">
+        <select id="filtroTipo">
+            <option value="">Todos os tipos</option>
+        </select>
+        <select id="filtroAno">
+            <option value="">Todos os anos</option>
+        </select>
+        <select id="filtroQualidade" title="Filtrar por qualidade do texto extraído">
+            <option value="">Qualquer qualidade</option>
+            <option value="ok">✓ Só texto bom</option>
+            <option value="curto">⚠ Texto curto</option>
+            <option value="vazio">✗ Sem texto (OCR falhou)</option>
+        </select>
+        <select id="ordenarResultados" title="Ordenação dos resultados">
+            <option value="recente">📅 Mais novos primeiro</option>
+            <option value="relevancia">🔍 Por relevância</option>
+        </select>
+    </div>
+
+    <div class="reindex-bar">
+        <button class="ajuda-toggle" id="btnAjuda">💡 dicas de busca</button>
+        <span id="indexInfo"></span>
+        <button id="btnReindexar" title="Recarrega a base do disco — útil quando o OCR gerou novos textos">🔄 Atualizar base</button>
+    </div>
+
+    <div class="ajuda-box" id="ajudaBox">
+        <h4>Operadores suportados na busca</h4>
+        <ul>
+            <li><code>"jornada de trabalho"</code> — frase exata (entre aspas)</li>
+            <li><code>jornada -revogada</code> — exclui documentos que contenham "revogada"</li>
+            <li><code>tipo:Lei</code>, <code>tipo:Decreto</code> — filtra pelo tipo</li>
+            <li><code>ano:2018</code> — filtra pelo ano</li>
+            <li><code>numero:749</code> — filtra pelo número da lei/decreto</li>
+            <li>Combine livremente: <code>"horas extras" tipo:Lei ano:2020 -revogada</code></li>
+        </ul>
+        <p style="margin-top:10px;color:#666;font-size:0.8rem;">
+            💡 As menções a outras leis nos resultados (ex: <span class="ref-link">Lei nº 749/2018</span>)
+            são <b>links clicáveis</b> que abrem o PDF correspondente.
+        </p>
+    </div>
+
+    <div id="loading">Pesquisando na velocidade da luz...</div>
+    
+    <div class="results-container" id="results">
+        <!-- Resultados aparecerão aqui -->
+        <p style="text-align: center; color: #999; margin-top: 50px;">Comece a digitar para realizar uma busca em todos os documentos da Prefeitura.</p>
+    </div>
+
+    <script>
+        const searchInput = document.getElementById('searchInput');
+        const resultsDiv = document.getElementById('results');
+        const loadingDiv = document.getElementById('loading');
+        const filtroTipo = document.getElementById('filtroTipo');
+        const filtroAno = document.getElementById('filtroAno');
+        const filtroQualidade = document.getElementById('filtroQualidade');
+        const ordenarResultados = document.getElementById('ordenarResultados');
+        const btnReindexar = document.getElementById('btnReindexar');
+        const btnAjuda = document.getElementById('btnAjuda');
+        const ajudaBox = document.getElementById('ajudaBox');
+        const indexInfo = document.getElementById('indexInfo');
+        const historicoContainer = document.getElementById('historicoContainer');
+
+        // === Histórico de buscas (localStorage) ===
+        const HIST_KEY = 'quadrabusca_historico';
+        const HIST_MAX = 10;
+
+        function carregarHistorico() {
+            try {
+                return JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+            } catch { return []; }
+        }
+
+        function salvarHistorico(lista) {
+            try { localStorage.setItem(HIST_KEY, JSON.stringify(lista)); } catch {}
+        }
+
+        function adicionarAoHistorico(query) {
+            if (!query || query.length < 2) return;
+            let hist = carregarHistorico().filter(q => q !== query);
+            hist.unshift(query);
+            hist = hist.slice(0, HIST_MAX);
+            salvarHistorico(hist);
+            renderHistorico();
+        }
+
+        function removerDoHistorico(query) {
+            const hist = carregarHistorico().filter(q => q !== query);
+            salvarHistorico(hist);
+            renderHistorico();
+        }
+
+        function renderHistorico() {
+            const hist = carregarHistorico();
+            if (hist.length === 0) {
+                historicoContainer.style.display = 'none';
+                return;
+            }
+            historicoContainer.style.display = 'flex';
+            historicoContainer.innerHTML = '<span>🕐 Recentes:</span>' +
+                hist.map(q => {
+                    const esc = q.replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                    return `<span class="chip" data-q="${esc}">${esc}<span class="x" data-rm="${esc}" title="Remover">×</span></span>`;
+                }).join('') +
+                `<span class="limpar" id="limparHist">limpar tudo</span>`;
+            historicoContainer.querySelectorAll('.chip').forEach(chip => {
+                chip.addEventListener('click', (e) => {
+                    if (e.target.dataset.rm) return; // clique no X foi tratado abaixo
+                    searchInput.value = chip.dataset.q;
+                    dispararBusca();
+                });
+            });
+            historicoContainer.querySelectorAll('[data-rm]').forEach(x => {
+                x.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removerDoHistorico(x.dataset.rm);
+                });
+            });
+            document.getElementById('limparHist').addEventListener('click', () => {
+                salvarHistorico([]);
+                renderHistorico();
+            });
+        }
+        renderHistorico();
+
+        // === Exportar resultados como CSV ===
+        let resultadosAtuais = [];
+
+        function exportarCsv() {
+            if (resultadosAtuais.length === 0) return;
+            const escCsv = v => {
+                const s = String(v == null ? '' : v);
+                return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+            };
+            const cabecalho = ['Nome', 'Tipo', 'Ano', 'Qualidade', 'Score', 'Caminho'];
+            const linhas = [cabecalho.join(';')];
+            resultadosAtuais.forEach(r => {
+                linhas.push([r.nome, r.tipo, r.ano, r.qualidade, r.score, r.caminho_pdf].map(escCsv).join(';'));
+            });
+            // BOM UTF-8 garante que Excel abra com acentos corretos
+            const blob = new Blob(['﻿' + linhas.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            a.href = url;
+            a.download = `quadrabusca_${ts}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Toggle da caixa de ajuda
+        btnAjuda.addEventListener('click', () => {
+            ajudaBox.classList.toggle('aberto');
+        });
+
+        const LABELS_QUALIDADE = {
+            ok: { texto: '✓ texto OK', titulo: 'Texto extraído com sucesso' },
+            curto: { texto: '⚠ texto curto', titulo: 'Pouco texto extraído — pode estar incompleto' },
+            vazio: { texto: '✗ sem texto', titulo: 'OCR falhou ou documento vazio — requer revisão humana' },
+        };
+
+        let timeout = null;
+
+        function formatarTimestamp(iso) {
+            if (!iso) return 'nunca';
+            try {
+                const d = new Date(iso);
+                return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            } catch { return iso; }
+        }
+
+        function aplicarMetadados(meta) {
+            // Repopula dropdowns preservando seleção atual
+            const tipoAtual = filtroTipo.value;
+            const anoAtual = filtroAno.value;
+
+            filtroTipo.innerHTML = '<option value="">Todos os tipos</option>';
+            (meta.tipos || []).forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t + 's';
+                filtroTipo.appendChild(opt);
+            });
+            filtroTipo.value = tipoAtual;
+
+            filtroAno.innerHTML = '<option value="">Todos os anos</option>';
+            (meta.anos || []).forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a;
+                opt.textContent = a;
+                filtroAno.appendChild(opt);
+            });
+            filtroAno.value = anoAtual;
+
+            if (meta.total !== undefined) {
+                // Subtítulo mostra total + breakdown de qualidade
+                let extra = '';
+                if (meta.qualidades) {
+                    const q = meta.qualidades;
+                    const partes = [];
+                    if (q.ok) partes.push(`${q.ok} com texto OK`);
+                    if (q.curto) partes.push(`${q.curto} curtos`);
+                    if (q.vazio) partes.push(`${q.vazio} sem texto`);
+                    if (partes.length) extra = ` (${partes.join(' · ')})`;
+                }
+                document.querySelector('.subtitle').textContent =
+                    `Motor de busca inteligente — ${meta.total} documentos${extra}`;
+                indexInfo.textContent = `Última indexação: ${formatarTimestamp(meta.ultima_indexacao)}`;
+            }
+        }
+
+        // Atalho: barra ( / ) foca a busca; Esc limpa
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '/' && document.activeElement !== searchInput) {
+                e.preventDefault();
+                searchInput.focus();
+            } else if (e.key === 'Escape' && document.activeElement === searchInput) {
+                searchInput.value = '';
+                searchInput.dispatchEvent(new Event('input'));
+            }
+        });
+
+        // Carrega metadados (tipos e anos disponíveis) e depois aplica params da URL
+        fetch('/api/metadados')
+            .then(r => r.json())
+            .then(meta => {
+                aplicarMetadados(meta);
+                // Restaura busca a partir dos URL params (compartilhamento de link)
+                const url = new URLSearchParams(window.location.search);
+                const q = url.get('q');
+                if (url.get('tipo')) filtroTipo.value = url.get('tipo');
+                if (url.get('ano')) filtroAno.value = url.get('ano');
+                if (url.get('qualidade')) filtroQualidade.value = url.get('qualidade');
+                if (url.get('ordenar')) ordenarResultados.value = url.get('ordenar');
+                if (q) {
+                    searchInput.value = q;
+                    dispararBusca();
+                }
+            })
+            .catch(() => {});
+
+        // Botão "Atualizar base" — recarrega o cache do disco (útil enquanto OCR roda)
+        btnReindexar.addEventListener('click', () => {
+            btnReindexar.disabled = true;
+            const textoOriginal = btnReindexar.textContent;
+            btnReindexar.textContent = '⏳ Atualizando...';
+
+            fetch('/api/reindexar', { method: 'POST' })
+                .then(r => r.json())
+                .then(resp => {
+                    if (resp.status === 'ok') {
+                        // Recarrega metadados para refletir os novos tipos/anos
+                        return fetch('/api/metadados').then(r => r.json()).then(aplicarMetadados);
+                    } else {
+                        alert('Não foi possível atualizar: ' + (resp.mensagem || resp.status));
+                    }
+                })
+                .catch(() => alert('Erro ao comunicar com o servidor.'))
+                .finally(() => {
+                    btnReindexar.disabled = false;
+                    btnReindexar.textContent = textoOriginal;
+                    // Se há busca ativa, refaz para incluir docs novos
+                    if (searchInput.value.trim().length >= 2) dispararBusca();
+                });
+        });
+
+        // Extrai o termo principal da query (para passar pro PDF reader via #search=)
+        // Prioriza frase exata entre aspas; senão, query inteira sem operadores
+        function extrairTermoDestaque(query) {
+            const frase = query.match(/"([^"]+)"/);
+            if (frase) return frase[1];
+            return query
+                .replace(/-\S+/g, '')
+                .replace(/\b(tipo|ano|numero):\S+/gi, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // Atualiza URL do browser (sem recarregar) para a busca ser compartilhável
+        function sincronizarUrl(query, filtros) {
+            const params = new URLSearchParams();
+            if (query) params.set('q', query);
+            if (filtros.tipo) params.set('tipo', filtros.tipo);
+            if (filtros.ano) params.set('ano', filtros.ano);
+            if (filtros.qualidade) params.set('qualidade', filtros.qualidade);
+            if (filtros.ordenar) params.set('ordenar', filtros.ordenar);
+            const novaUrl = params.toString() ? `${window.location.pathname}?${params}` : window.location.pathname;
+            window.history.replaceState(null, '', novaUrl);
+        }
+
+        function dispararBusca() {
+            const query = searchInput.value.trim();
+
+            const filtros = {
+                tipo: filtroTipo.value,
+                ano: filtroAno.value,
+                qualidade: filtroQualidade.value,
+                ordenar: ordenarResultados.value,
+            };
+            sincronizarUrl(query, filtros);
+
+            if (query.length < 2) {
+                resultsDiv.innerHTML = '<p style="text-align: center; color: #999; margin-top: 50px;">Comece a digitar para realizar uma busca em todos os documentos da Prefeitura.</p>';
+                return;
+            }
+
+            loadingDiv.style.display = 'block';
+            resultsDiv.innerHTML = '';
+
+            const params = new URLSearchParams({ q: query });
+            if (filtros.tipo) params.set('tipo', filtros.tipo);
+            if (filtros.ano) params.set('ano', filtros.ano);
+            if (filtros.qualidade) params.set('qualidade', filtros.qualidade);
+            if (filtros.ordenar) params.set('ordenar', filtros.ordenar);
+
+            const termoDestaque = extrairTermoDestaque(query);
+
+            const startTime = performance.now();
+            fetch(`/api/search?${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    const timeTaken = ((performance.now() - startTime) / 1000).toFixed(2);
+                    loadingDiv.style.display = 'none';
+                    renderResults(data, timeTaken, termoDestaque);
+                })
+                .catch(err => {
+                    loadingDiv.style.display = 'none';
+                    resultsDiv.innerHTML = '<p class="no-results">Erro ao comunicar com o servidor. O servidor Python está rodando?</p>';
+                });
+        }
+
+        searchInput.addEventListener('input', function() {
+            clearTimeout(timeout);
+            timeout = setTimeout(dispararBusca, 300);
+        });
+
+        // Re-busca ao mudar filtros
+        filtroTipo.addEventListener('change', dispararBusca);
+        filtroAno.addEventListener('change', dispararBusca);
+        filtroQualidade.addEventListener('change', dispararBusca);
+        ordenarResultados.addEventListener('change', dispararBusca);
+
+        // Monta o href do PDF com #search=<termo> para Chrome/Edge abrirem já no termo
+        function montarHrefPdf(caminhoPdf, termoDestaque) {
+            const base = `/abrir_pdf?caminho=${encodeURIComponent(caminhoPdf)}`;
+            if (!termoDestaque) return base;
+            // Fragment NÃO passa pro servidor — fica só no leitor de PDF do navegador
+            return `${base}#search=${encodeURIComponent(termoDestaque)}`;
+        }
+
+        function renderResults(data, timeTaken, termoDestaque) {
+            resultsDiv.innerHTML = '';
+
+            const resultados = data.resultados || [];
+            const sugestoes = data.sugestoes || [];
+
+            // Salva para exportação e adiciona ao histórico (só se deu resultado)
+            resultadosAtuais = resultados;
+            if (resultados.length > 0) {
+                adicionarAoHistorico(searchInput.value.trim());
+            }
+
+            if (resultados.length === 0) {
+                let html = '<p class="no-results">Nenhum documento encontrado com esses termos.</p>';
+                if (sugestoes.length > 0) {
+                    const links = sugestoes
+                        .map(s => `<a href="#" data-sugestao="${s}">${s}</a>`)
+                        .join(' · ');
+                    html += `<div class="sugestoes">💡 Você quis dizer: ${links} ?</div>`;
+                }
+                resultsDiv.innerHTML = html;
+                // Wire clicks nas sugestões
+                resultsDiv.querySelectorAll('[data-sugestao]').forEach(el => {
+                    el.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        searchInput.value = el.dataset.sugestao;
+                        dispararBusca();
+                    });
+                });
+                return;
+            }
+
+            const info = document.createElement('div');
+            info.className = 'stats';
+            const txtOrdenacao = ordenarResultados.value === 'recente' ? 'mais novos primeiro' : 'relevância';
+            info.innerHTML = `<button class="btn-exportar" id="btnExportar" title="Baixar resultados como planilha CSV">📥 Exportar CSV</button>
+                ${resultados.length} resultado(s), ordenados por ${txtOrdenacao} (${timeTaken}s)`;
+            resultsDiv.appendChild(info);
+            document.getElementById('btnExportar').addEventListener('click', exportarCsv);
+
+            resultados.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+
+                const snippetBloco = item.snippet
+                    .split('  <br><br>  ')
+                    .map(s => `<div class="snippet-block">${s}</div>`)
+                    .join('');
+
+                const qInfo = LABELS_QUALIDADE[item.qualidade] || { texto: item.qualidade, titulo: '' };
+                const badgeQualidade = item.qualidade
+                    ? `<span class="badge-qualidade ${item.qualidade}" title="${qInfo.titulo}">${qInfo.texto}</span>`
+                    : '';
+
+                const hrefPdf = montarHrefPdf(item.caminho_pdf, termoDestaque);
+
+                card.innerHTML = `
+                    <a href="${hrefPdf}" target="_blank" class="doc-title" title="Abrir PDF posicionado em '${termoDestaque || ''}'">📄 ${item.nome}</a>
+                    <span class="doc-meta">${item.tipo}${item.ano ? ' · ' + item.ano : ''}</span>
+                    ${badgeQualidade}
+                    <span class="doc-score" title="Pontuação de relevância">score ${item.score}</span>
+                    <div class="doc-category">📂 ${item.categoria}</div>
+                    <div class="doc-snippet">${snippetBloco}</div>
+                `;
+
+                resultsDiv.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>

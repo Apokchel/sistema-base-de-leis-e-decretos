@@ -5,6 +5,11 @@ import re
 import time
 from playwright.sync_api import sync_playwright
 import pdfplumber
+import ocrmypdf
+import logging
+
+# Silencia logs verbosos do ocrmypdf (mantém só warnings/errors)
+logging.getLogger("ocrmypdf").setLevel(logging.WARNING)
 
 # Configurações do Scraper
 BASE_URL = "https://www.quadra.sp.gov.br"
@@ -60,33 +65,62 @@ def download_file(url, pasta_destino, filename):
     except Exception as e:
         print(f"  ❌ Erro ao baixar {filename}: {e}")
 
+def _ler_texto_pdf(pdf_path):
+    """Lê texto de um PDF usando pdfplumber. Retorna string (possivelmente vazia)."""
+    textos = []
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                textos.append(text)
+    return "\n".join(textos).strip()
+
+def aplicar_ocr_no_pdf(pdf_path):
+    """Aplica OCR no PDF in-place (adiciona camada de texto invisível).
+    Usa Tesseract via ocrmypdf. Idempotente: skip_text pula páginas que já têm texto."""
+    try:
+        ocrmypdf.ocr(
+            pdf_path,
+            pdf_path,
+            language="por",
+            skip_text=True,
+            optimize=0,
+            progress_bar=False,
+        )
+        return True
+    except ocrmypdf.exceptions.PriorOcrFoundError:
+        # PDF já tem OCR — não é falha
+        return True
+    except Exception as e:
+        print(f"  ⚠️ Falha no OCR de {os.path.basename(pdf_path)}: {e}")
+        return False
+
 def extract_pdf_text(pdf_path, txt_path):
-    """Lê um PDF e salva o conteúdo em um arquivo .txt paralelo."""
+    """Lê um PDF e salva o conteúdo em um arquivo .txt paralelo.
+    Se o PDF for escaneado (sem camada de texto), aplica OCR automaticamente."""
     if os.path.exists(txt_path):
         return # Já extraímos o texto antes
-        
+
     try:
-        texto_completo = []
-        with pdfplumber.open(pdf_path) as pdf:
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    texto_completo.append(text)
-                    
-        texto_final = "\n".join(texto_completo).strip()
-        
+        texto_final = _ler_texto_pdf(pdf_path)
+
+        # Se não veio texto, é PDF escaneado → roda OCR e tenta de novo
+        if not texto_final:
+            print(f"  🔎 PDF sem texto detectado, aplicando OCR (pt-br)...")
+            if aplicar_ocr_no_pdf(pdf_path):
+                texto_final = _ler_texto_pdf(pdf_path)
+
         with open(txt_path, "w", encoding="utf-8") as f_txt:
             if texto_final:
                 f_txt.write(texto_final)
+                print(f"  📝 Arquivo de texto (.txt) gerado para leitura rápida da IA.")
             else:
-                f_txt.write("[Aviso: Documento provavelmente escaneado como imagem. O texto não pôde ser lido pela máquina. O Esquadrão Jurídico precisa de OCR ou leitura humana para este arquivo especifíco.]")
-                
+                f_txt.write("[Aviso: Documento provavelmente escaneado como imagem. O texto não pôde ser lido pela máquina mesmo após OCR. Revisão humana necessária.]")
                 # Registra o PDF na lista de pendentes de OCR
                 ocr_log_path = os.path.join(BASE_SAVE_PATH, "PENDENTES_DE_OCR.txt")
                 with open(ocr_log_path, "a", encoding="utf-8") as f_ocr:
                     f_ocr.write(f"{pdf_path}\n")
-                
-        print(f"  📝 Arquivo de texto (.txt) gerado para leitura rápida da IA.")
+                print(f"  ⚠️ OCR não recuperou texto — registrado em PENDENTES_DE_OCR.txt")
     except Exception as e:
         print(f"  ⚠️ Erro ao extrair texto do PDF {os.path.basename(pdf_path)}: {e}")
 
